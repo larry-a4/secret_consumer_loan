@@ -12,6 +12,7 @@ pub const CONFIG_KEY: &[u8] = b"config";
 pub const STATE_KEY: &[u8] = b"state";
 pub const ALLOWANCE_PREFIX: &[u8] = b"allowance";
 pub const BALANCE_PREFIX: &[u8] = b"balance";
+pub const BORROW_PREFIX: &[u8] = b"borrow";
 
 /// Config struct
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -129,7 +130,16 @@ pub fn set_state<S: Storage>(storage: &mut S, state: &State) -> StdResult<()> {
 
 pub fn get_balance<S: Storage>(store: &S, owner: &CanonicalAddr) -> StdResult<u128> {
     let balance_store = ReadonlyPrefixedStorage::new(BALANCE_PREFIX, store);
-    load(&balance_store, owner.as_slice())
+    let result = load(&balance_store, owner.as_slice());
+    match result {
+        Some(data) => bytes_to_u128(&data),
+        None => Ok(0u128),
+    }
+}
+
+pub fn set_balance<S: Storage>(store: &S, owner: &CanonicalAddr, balance: u128) -> StdResult<()> {
+    let mut balance_store = PrefixedStorage::new(BALANCE_PREFIX, store);
+    save(&balance_store, owner.as_slice(), &balance.to_be_bytes())
 }
 
 pub fn get_allowance<S: Storage>(
@@ -137,9 +147,13 @@ pub fn get_allowance<S: Storage>(
     owner: &CanonicalAddr,
     spender: &CanonicalAddr
 ) -> StdResult<u128> {
-    let allowance_store = ReadonlyPrefixedStorage::new(ALLOWANCE_PREFIX, store);
-    let owner_store = ReadonlyPrefixedStorage::new(owner.as_slice(), &allowance_store);
-    load(&owner_store, spender.as_slice())
+    let owner_store =
+        ReadonlyPrefixedStorage::multilevel(&[ALLOWANCE_PREFIX, owner.as_slice()], store);
+    let result = load(&owner_store, spender.as_slice());
+    match result {
+        Some(data) => bytes_to_u128(&data),
+        None => Ok(0u128),
+    }
 }
 
 
@@ -150,11 +164,9 @@ pub fn set_allowance<S: Storage>(
     spender: &CanonicalAddr,
     amount: u128,
 ) -> StdResult<()> {
-    let mut allowances_store = PrefixedStorage::new(ALLOWANCE_PREFIX, store);
-    let mut owner_store = PrefixedStorage::new(owner.as_slice(), &mut allowances_store);
-    save(&owner_store, spender.as_slice(), &amount);
-    //owner_store.set(spender.as_slice(), &amount.to_be_bytes());
-    Ok(())
+    let mut owner_store =
+        PrefixedStorage::multilevel(&[ALLOWANCE_PREFIX, owner.as_slice()], store);
+    save(&owner_store, spender.as_slice(), &amount.to_be_bytes())
 }
 
 pub fn get_borrow_balance<S: Storage>(store: &S, owner: &CanonicalAddr) -> Option<BorrowSnapshot> {
@@ -175,5 +187,18 @@ pub fn set_borrow_balance<S: Storage>(
             "Failed to write to the borrow_balance. key: {:?}, value: {:?}",
             owner, snapshot
         ))),
+    }
+}
+
+// Helpers
+
+/// Converts 16 bytes value into u128
+/// Errors if data found that is not 16 bytes
+fn bytes_to_u128(data: &[u8]) -> StdResult<u128> {
+    match <[u8; 16]>::try_from(data) {
+        Ok(bytes) => Ok(u128::from_be_bytes(bytes)),
+        Err(_) => Err(StdError::generic_err(
+            "Corrupted data found. 16 byte expected.",
+        )),
     }
 }

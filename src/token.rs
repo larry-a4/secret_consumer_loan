@@ -7,8 +7,7 @@ use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 //use std::convert::TryInto;
 
 use crate::state::{
-    bytes_to_u128, get_allowance, get_balance, set_allowance, to_u128, ALLOWANCE_PREFIX,
-    BALANCE_PREFIX,
+    get_allowance, get_balance, set_allowance, set_balance
 };
 
 pub fn try_transfer<S: Storage, A: Api, Q: Querier>(
@@ -118,9 +117,7 @@ fn perform_transfer<T: Storage>(
     to: &CanonicalAddr,
     amount: u128,
 ) -> StdResult<()> {
-    let mut balances_store = PrefixedStorage::new(BALANCE_PREFIX, store);
-
-    let mut from_balance = to_u128(&balances_store, from.as_slice())?;
+    let mut from_balance = get_balance(store, from);
     if from_balance < amount {
         return Err(StdError::generic_err(format!(
             "Insufficient funds: sender={}, balance={}, required={}",
@@ -130,11 +127,11 @@ fn perform_transfer<T: Storage>(
         )));
     }
     from_balance -= amount;
-    balances_store.set(from.as_slice(), &from_balance.to_be_bytes());
+    set_balance(store, from, from_balance);
 
-    let mut to_balance = to_u128(&balances_store, to.as_slice())?;
+    let mut to_balance = get_balance(store, to);
     to_balance += amount;
-    balances_store.set(to.as_slice(), &to_balance.to_be_bytes());
+    set_balance(store, to, to_balance);
 
     Ok(())
 }
@@ -144,11 +141,9 @@ pub fn mint_tokens<T: Storage>(
     to: &CanonicalAddr,
     amount: u128,
 ) -> StdResult<()> {
-    let mut balances_store = PrefixedStorage::new(BALANCE_PREFIX, store);
-
-    let mut to_balance = to_u128(&balances_store, to.as_slice())?;
+    let mut to_balance = get_balance(store, to);
     to_balance += amount;
-    balances_store.set(to.as_slice(), &to_balance.to_be_bytes());
+    set_balance(store, to, to_balance);
 
     Ok(())
 }
@@ -159,11 +154,9 @@ pub fn burn_tokens<T: Storage>(
     to: &CanonicalAddr,
     amount: u128,
 ) -> StdResult<()> {
-    let mut balances_store = PrefixedStorage::new(BALANCE_PREFIX, store);
-
-    let mut to_balance = to_u128(&balances_store, to.as_slice())?;
+    let mut to_balance = get_balance(store, to);
     to_balance -= amount;
-    balances_store.set(to.as_slice(), &to_balance.to_be_bytes());
+    set_balance(store, to, to_balance);
 
     Ok(())
 }
