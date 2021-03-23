@@ -1,21 +1,23 @@
-use serde::{Deserialize, Serialize};
+//use serde::{Deserialize, Serialize};
 
 use cosmwasm_std::{
-    to_binary, Api, CanonicalAddr, Empty, Env, Extern, HandleResponse, HandleResult, HumanAddr,
-    InitResponse, InitResult, Querier, QueryResult, StdResult, StdError, Storage, Uint128,
+    to_binary, Api, Env, Extern, HandleResponse, HumanAddr,
+    InitResponse, InitResult, Querier, QueryResult, StdResult, Storage, Uint128,
 };
 
-use std::collections::HashSet;
+//use std::collections::HashSet;
 
-use serde_json_wasm as serde_json;
+//use serde_json_wasm as serde_json;
 
-use secret_toolkit::utils::{pad_handle_result, pad_query_result, HandleCallback, Query};
+use secret_toolkit::utils::{pad_handle_result, pad_query_result};
 
 use crate::msg::{
-    HandleAnswer, HandleMsg, InitMsg, QueryAnswer, QueryMsg, ResponseStatus,
-    ResponseStatus::{Failure, Success},
+    HandleMsg, InitMsg, QueryAnswer, QueryMsg,
 };
-use crate::state::{load, may_load, remove, save, get_allowance, get_balance, Config, State, get_config};
+use crate::state::{
+    save, get_allowance, get_balance ,get_config, Config, State,
+    CONFIG_KEY, STATE_KEY,
+};
 
 use crate::{collateral, token};
 
@@ -59,10 +61,10 @@ pub fn init<S: Storage, A: Api, Q: Querier>(
 }
 
 pub fn handle<S: Storage, A: Api, Q: Querier>(
-    deps: &mut &Extern<S, A, Q>,
+    deps: &mut Extern<S, A, Q>,
     env: Env,
     msg: HandleMsg,
-) -> StdResult<HandleResponse<Empty>> {
+) -> StdResult<HandleResponse> {
     let response = match msg {
         HandleMsg::Mint {} => collateral::try_mint(deps, env),
         HandleMsg::Redeem { redeem_tokens_in } => {
@@ -73,13 +75,13 @@ pub fn handle<S: Storage, A: Api, Q: Querier>(
         },
         HandleMsg::RepayBorrow {} => collateral::try_repay_borrow(deps, env),
         HandleMsg::Approve { spender,amount } => {
-            token::try_approve(deps, env, &spender, amount)
+            token::try_approve(deps, env, &spender, &amount)
         },
         HandleMsg::Transfer { recipient, amount } => {
-            token::try_transfer(deps, env, &recipient, amount)
+            token::try_transfer(deps, env, &recipient, &amount)
         },
         HandleMsg::TransferFrom { owner, recipient, amount } => {
-            token::try_transfer_from(deps, env, &owner, &recipient, amount)
+            token::try_transfer_from(deps, env, &owner, &recipient, &amount)
         },
     };
     pad_handle_result(response, BLOCK_SIZE)
@@ -100,7 +102,7 @@ pub fn query<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>, msg: QueryM
 }
 
 fn try_query_config<S: Storage, A: Api, Q: Querier>(deps: &Extern<S, A, Q>) -> QueryResult {
-    let config: Config = get_config(&S)?;
+    let config: Config = get_config(&deps.storage)?;
     to_binary(&QueryAnswer::ConfigResponse {
         name: config.name,
         total_supply: Uint128::from(config.total_supply),

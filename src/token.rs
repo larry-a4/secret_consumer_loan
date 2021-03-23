@@ -1,8 +1,8 @@
 use cosmwasm_std::{
-    log, Api, Binary, CanonicalAddr, Env, Extern, HandleResponse, HumanAddr, InitResponse, Querier,
-    ReadonlyStorage, StdError, StdResult, Storage, Uint128,
+    log, Api, CanonicalAddr, Env, Extern, HandleResponse, HumanAddr, Querier,
+    StdError, StdResult, Storage, Uint128,
 };
-use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
+//use cosmwasm_storage::{PrefixedStorage, ReadonlyPrefixedStorage};
 
 //use std::convert::TryInto;
 
@@ -117,7 +117,7 @@ fn perform_transfer<T: Storage>(
     to: &CanonicalAddr,
     amount: u128,
 ) -> StdResult<()> {
-    let mut from_balance = get_balance(store, from);
+    let mut from_balance = get_balance(store, from)?;
     if from_balance < amount {
         return Err(StdError::generic_err(format!(
             "Insufficient funds: sender={}, balance={}, required={}",
@@ -127,13 +127,11 @@ fn perform_transfer<T: Storage>(
         )));
     }
     from_balance -= amount;
-    set_balance(store, from, from_balance);
+    set_balance(store, from, from_balance)?;
 
-    let mut to_balance = get_balance(store, to);
+    let mut to_balance = get_balance(store, to)?;
     to_balance += amount;
-    set_balance(store, to, to_balance);
-
-    Ok(())
+    set_balance(store, to, to_balance)
 }
 
 pub fn mint_tokens<T: Storage>(
@@ -141,11 +139,9 @@ pub fn mint_tokens<T: Storage>(
     to: &CanonicalAddr,
     amount: u128,
 ) -> StdResult<()> {
-    let mut to_balance = get_balance(store, to);
+    let mut to_balance = get_balance(store, to)?;
     to_balance += amount;
-    set_balance(store, to, to_balance);
-
-    Ok(())
+    set_balance(store, to, to_balance)
 }
 
 
@@ -154,9 +150,7 @@ pub fn burn_tokens<T: Storage>(
     to: &CanonicalAddr,
     amount: u128,
 ) -> StdResult<()> {
-    let mut to_balance = get_balance(store, to);
+    let mut to_balance = get_balance(store, to)?;
     to_balance -= amount;
-    set_balance(store, to, to_balance);
-
-    Ok(())
+    set_balance(store, to, to_balance)
 }

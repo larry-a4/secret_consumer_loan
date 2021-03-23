@@ -1,11 +1,13 @@
-use std::{any::type_name, collections::HashSet};
+use std::{any::type_name};
+use std::convert::TryFrom;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use cosmwasm_std::{CanonicalAddr, HumanAddr, ReadonlyStorage, StdError, StdResult, Storage};
-use cosmwasm_storage::{ReadonlyPrefixedStorage, PrefixedStorage};
+use cosmwasm_std::{CanonicalAddr, ReadonlyStorage, StdError, StdResult, Storage};
+use cosmwasm_storage::{ReadonlyPrefixedStorage, PrefixedStorage, Bucket, ReadonlyBucket};
 
 use secret_toolkit::serialization::{Bincode2, Serde};
+//use secret_toolkit::storage::{AppendStore, AppendStoreMut, TypedStore, TypedStoreMut};
 
 /// storage key for contract state
 pub const CONFIG_KEY: &[u8] = b"config";
@@ -29,7 +31,7 @@ pub struct Config {
 }
 
 /// state of the auction
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct State {
     pub cash: u128,
     pub block_number: u64,
@@ -130,16 +132,12 @@ pub fn set_state<S: Storage>(storage: &mut S, state: &State) -> StdResult<()> {
 
 pub fn get_balance<S: Storage>(store: &S, owner: &CanonicalAddr) -> StdResult<u128> {
     let balance_store = ReadonlyPrefixedStorage::new(BALANCE_PREFIX, store);
-    let result = load(&balance_store, owner.as_slice());
-    match result {
-        Some(data) => bytes_to_u128(&data),
-        None => Ok(0u128),
-    }
+    load(&balance_store, owner.as_slice())
 }
 
-pub fn set_balance<S: Storage>(store: &S, owner: &CanonicalAddr, balance: u128) -> StdResult<()> {
+pub fn set_balance<S: Storage>(store: &mut S, owner: &CanonicalAddr, balance: u128) -> StdResult<()> {
     let mut balance_store = PrefixedStorage::new(BALANCE_PREFIX, store);
-    save(&balance_store, owner.as_slice(), &balance.to_be_bytes())
+    save(&mut balance_store, owner.as_slice(), &balance)
 }
 
 pub fn get_allowance<S: Storage>(
@@ -149,11 +147,7 @@ pub fn get_allowance<S: Storage>(
 ) -> StdResult<u128> {
     let owner_store =
         ReadonlyPrefixedStorage::multilevel(&[ALLOWANCE_PREFIX, owner.as_slice()], store);
-    let result = load(&owner_store, spender.as_slice());
-    match result {
-        Some(data) => bytes_to_u128(&data),
-        None => Ok(0u128),
-    }
+    load(&owner_store, spender.as_slice())
 }
 
 
@@ -166,7 +160,7 @@ pub fn set_allowance<S: Storage>(
 ) -> StdResult<()> {
     let mut owner_store =
         PrefixedStorage::multilevel(&[ALLOWANCE_PREFIX, owner.as_slice()], store);
-    save(&owner_store, spender.as_slice(), &amount.to_be_bytes())
+    save(&mut owner_store, spender.as_slice(), &amount)
 }
 
 pub fn get_borrow_balance<S: Storage>(store: &S, owner: &CanonicalAddr) -> Option<BorrowSnapshot> {
